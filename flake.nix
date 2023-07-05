@@ -50,7 +50,7 @@
 
         myCBuild = pkgs.llvmPackages_latest.stdenv.mkDerivation rec {
           name = "network-simulator";
-          src = "${self}/network-simulator";
+          src = "${self}";
 
           cmakeFlags = [
             "-DCMAKE_SANITIZER_MOD=${sanitizers-cmake}"
