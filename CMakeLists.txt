@@ -53,6 +53,7 @@ set(SANITIZE_UNDEFINED TRUE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
+
 project (Network-Simulator)
 find_package(Sanitizers)
 
@@ -62,13 +63,16 @@ find_package(ClangFormat)
 # Enable static c analyzer clang-tidy
 set(CMAKE_C_LANG_TIDY "clang-tidy;-checks=*")
 
+# Add system include directories to compile_commands.json
+set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES};${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+
 
 # Client
 add_executable(client
   src/main.cpp
 )
 
-target_link_libraries(client PUBLIC ns3.38-core)
+target_link_libraries(client PUBLIC ns3.38-core ns3.38-applications ns3.38-internet ns3.38-csma ns3.38-network)
 
 #add_sanitizers(client) # Add LLVMs sanitizers
 target_include_directories(client PRIVATE include)

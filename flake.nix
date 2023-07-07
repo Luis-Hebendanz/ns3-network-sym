@@ -34,14 +34,6 @@
         ];
         python-with-my-packages = pkgs.python3.withPackages my-python-packages;
 
-        # luis = import luispkgs
-        # {
-        #   system = "x86_64-linux";
-        #   config = {
-        #     allowUnfree = true;
-        #   };
-        # };
-
         # buildInputs
         buildDeps = with pkgs; [
           pkg-config
@@ -89,9 +81,11 @@
           shellHook = ''
             export hardeningDisable=all
             export NS3_LOC=${pkgs.ns-3}
-            export GLIBC=${pkgs.glibc}
+
             export CMAKE_SANITIZER_MOD=${sanitizers-cmake}
             export CMAKE_FORMAT_MOD=${clang-format-cmake}
+            export LD_LIBRARY_PATH=${pkgs.ns-3}/lib
+            export IPYTHON=${pkgs.python310Packages.ipython}
 
             export ASAN_OPTIONS=check_initialization_order=1
             ln -sf build/compile_commands.json compile_commands.json
