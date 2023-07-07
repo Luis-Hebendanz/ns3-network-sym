@@ -13,12 +13,13 @@
       flake = false;
     };
 
+    luispkgs.url = "github:Luis-Hebendanz/nixpkgs/fix_ns3";
   };
 
-  outputs = { self, nixpkgs, utils, clang-format-cmake, sanitizers-cmake }:
+  outputs = { self, nixpkgs, utils, clang-format-cmake, sanitizers-cmake, luispkgs }:
     utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs {
+        pkgs = import luispkgs {
           inherit system; config = {
           allowUnfree = true;
         };
@@ -29,8 +30,17 @@
           autopep8
           setuptools
           ipython
+          pkgs.ns-3
         ];
         python-with-my-packages = pkgs.python3.withPackages my-python-packages;
+
+        # luis = import luispkgs
+        # {
+        #   system = "x86_64-linux";
+        #   config = {
+        #     allowUnfree = true;
+        #   };
+        # };
 
         # buildInputs
         buildDeps = with pkgs; [
@@ -38,11 +48,11 @@
           cmake
           llvmPackages_latest.clang
           llvmPackages_latest.lld
+          ns-3
         ];
 
         # nativeBuildInputs
         runtimeDeps = with pkgs; [
-          ns-3
           shellcheck
           llvmPackages_latest.bintools
           python-with-my-packages
@@ -78,6 +88,8 @@
           buildInputs = runtimeDeps ++ buildDeps;
           shellHook = ''
             export hardeningDisable=all
+            export NS3_LOC=${pkgs.ns-3}
+            export GLIBC=${pkgs.glibc}
             export CMAKE_SANITIZER_MOD=${sanitizers-cmake}
             export CMAKE_FORMAT_MOD=${clang-format-cmake}
 

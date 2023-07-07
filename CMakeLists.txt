@@ -47,14 +47,13 @@ endif()
 set(SANITIZE_UNDEFINED TRUE)
 
 # Use ANSI color escape codes for logging
-add_definitions(-DLOG_USE_COLOR)
+#add_definitions(-DLOG_USE_COLOR)
 
 # Generate compile_commands.json for language server
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
 project (Network-Simulator)
-set (CMAKE_C_STANDARD 11)
 find_package(Sanitizers)
 
 # Adds clang-format
@@ -68,25 +67,17 @@ set(CMAKE_C_LANG_TIDY "clang-tidy;-checks=*")
 add_executable(client
   src/main.cpp
 )
-add_sanitizers(client) # Add LLVMs sanitizers
+
+target_link_libraries(client PUBLIC ns3.38-core)
+
+#add_sanitizers(client) # Add LLVMs sanitizers
 target_include_directories(client PRIVATE include)
 set_target_properties(client PROPERTIES OUTPUT_NAME "network-simulator")
 target_compile_options (client PRIVATE -Og  -Wall -Wextra -Wpedantic -Wno-unused-parameter)
 target_compile_options (client PRIVATE -gfull -fno-limit-debug-info) # Needed for better stack traces
+set_property(TARGET client PROPERTY CXX_STANDARD 23)
 install(TARGETS client
   RUNTIME DESTINATION "."
   DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 target_clangformat_setup(client) # Add clang format build target
-
-
-# Packaging
-set(CPACK_SOURCE_GENERATOR "TGZ")
-set(CPACK_SOURCE_IGNORE_FILES
-  ${CMAKE_BINARY_DIR}
-  /\\..*$
-)
-set(CPACK_VERBATIM_VARIABLES YES)
-include(CPack)
-
-
