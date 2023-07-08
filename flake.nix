@@ -13,7 +13,7 @@
       flake = false;
     };
 
-    luispkgs.url = "github:Luis-Hebendanz/nixpkgs/fix_ns3";
+    luispkgs.url = "github:Luis-Hebendanz/nixpkgs/fix2_ns3";
   };
 
   outputs = { self, nixpkgs, utils, clang-format-cmake, sanitizers-cmake, luispkgs }:
@@ -81,6 +81,7 @@
           shellHook = ''
             export hardeningDisable=all
             export NS3_LOC=${pkgs.ns-3}
+            export NS_LOG="*=level_all|prefix_func|prefix_time"
 
             export CMAKE_SANITIZER_MOD=${sanitizers-cmake}
             export CMAKE_FORMAT_MOD=${clang-format-cmake}

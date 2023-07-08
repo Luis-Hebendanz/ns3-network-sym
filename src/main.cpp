@@ -13,138 +13,125 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-// Network topology
 //
-//       n0    n1   n2   n3
-//       |     |    |    |
-//       =================
-//              LAN
+// This is an illustration of how one could use virtualization techniques to
+// allow running applications on virtual machines talking over simulated
+// networks.
 //
-// - UDP flows from n0 to n1 and back
-// - DropTail queues
-// - Tracing of queues and packet receptions to file "udp-echo.tr"
-
-#include "ns3/applications-module.h"
+// The actual steps required to configure the virtual machines can be rather
+// involved, so we don't go into that here.  Please have a look at one of
+// our HOWTOs on the nsnam wiki for more details about how to get the
+// system configured.  For an example, have a look at "HOWTO Use Linux
+// Containers to set up virtual networks" which uses this code as an
+// example.
+//
+// The configuration you are after is explained in great detail in the
+// HOWTO, but looks like the following:
+//
+//  +----------+                           +----------+
+//  | virtual  |                           | virtual  |
+//  |  Linux   |                           |  Linux   |
+//  |   Host   |                           |   Host   |
+//  |          |                           |          |
+//  |   eth0   |                           |   eth0   |
+//  +----------+                           +----------+
+//       |                                      |
+//  +----------+                           +----------+
+//  |  Linux   |                           |  Linux   |
+//  |  Bridge  |                           |  Bridge  |
+//  +----------+                           +----------+
+//       |                                      |
+//  +------------+                       +-------------+
+//  | "tap-left" |                       | "tap-right" |
+//  +------------+                       +-------------+
+//       |           n0            n1           |
+//       |       +--------+    +--------+       |
+//       +-------|  tap   |    |  tap   |-------+
+//               | bridge |    | bridge |
+//               +--------+    +--------+
+//               |  CSMA  |    |  CSMA  |
+//               +--------+    +--------+
+//                   |             |
+//                   |             |
+//                   |             |
+//                   ===============
+//                      CSMA LAN
+//
 #include "ns3/core-module.h"
 #include "ns3/csma-module.h"
-#include "ns3/internet-module.h"
+#include "ns3/network-module.h"
+#include "ns3/tap-bridge-module.h"
 
 #include <fstream>
+#include <iostream>
+#include <ns3/log.h>
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("UdpEchoExample");
+NS_LOG_COMPONENT_DEFINE("TapCsmaVirtualMachineExample");
 
 int
 main(int argc, char* argv[])
 {
-//
-// Users may find it convenient to turn on explicit debugging
-// for selected modules; the below lines suggest how to do this
-//
-#if 0
-  LogComponentEnable ("UdpEchoExample", LOG_LEVEL_INFO);
-  LogComponentEnable ("UdpEchoClientApplication", LOG_LEVEL_ALL);
-  LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_ALL);
-#endif
-    //
-    // Allow the user to override any of the defaults and the above Bind() at
-    // run-time, via command-line arguments
-    //
-    bool useV6 = false;
-    Address serverAddress;
-
     CommandLine cmd(__FILE__);
-    cmd.AddValue("useIpv6", "Use Ipv6", useV6);
     cmd.Parse(argc, argv);
-    //
-    // Explicitly create the nodes required by the topology (shown above).
-    //
-    NS_LOG_INFO("Create nodes.");
-    NodeContainer n;
-    n.Create(4);
 
-    InternetStackHelper internet;
-    internet.Install(n);
+    // if (argc < 2) {
+    //     cmd.PrintHelp(std::cout);
+    //     exit(1);
+    // }
 
-    NS_LOG_INFO("Create channels.");
     //
-    // Explicitly create the channels required by the topology (shown above).
+    // We are interacting with the outside, real, world.  This means we have to
+    // interact in real-time and therefore means we have to use the real-time
+    // simulator and take the time to calculate checksums.
+    //
+    GlobalValue::Bind("SimulatorImplementationType", StringValue("ns3::RealtimeSimulatorImpl"));
+    GlobalValue::Bind("ChecksumEnabled", BooleanValue(true));
+
+    //
+    // Create two ghost nodes.  The first will represent the virtual machine host
+    // on the left side of the network; and the second will represent the VM on
+    // the right side.
+    //
+    NodeContainer nodes;
+    nodes.Create(2);
+
+    //
+    // Use a CsmaHelper to get a CSMA channel created, and the needed net
+    // devices installed on both of the nodes.  The data rate and delay for the
+    // channel can be set through the command-line parser.  For example,
+    //
+    // ./ns3 run "tap-csma-virtual-machine --ns3::CsmaChannel::DataRate=10000000"
     //
     CsmaHelper csma;
-    csma.SetChannelAttribute("DataRate", DataRateValue(DataRate(5000000)));
-    csma.SetChannelAttribute("Delay", TimeValue(MilliSeconds(2)));
-    csma.SetDeviceAttribute("Mtu", UintegerValue(1400));
-    NetDeviceContainer d = csma.Install(n);
+    NetDeviceContainer devices = csma.Install(nodes);
 
     //
-    // We've got the "hardware" in place.  Now we need to add IP addresses.
+    // Use the TapBridgeHelper to connect to the pre-configured tap devices for
+    // the left side.  We go with "UseBridge" mode since the CSMA devices support
+    // promiscuous mode and can therefore make it appear that the bridge is
+    // extended into ns-3.  The install method essentially bridges the specified
+    // tap to the specified CSMA device.
     //
-    NS_LOG_INFO("Assign IP Addresses.");
-    if (!useV6)
-    {
-        Ipv4AddressHelper ipv4;
-        ipv4.SetBase("10.1.1.0", "255.255.255.0");
-        Ipv4InterfaceContainer i = ipv4.Assign(d);
-        serverAddress = Address(i.GetAddress(1));
-    }
-    else
-    {
-        Ipv6AddressHelper ipv6;
-        ipv6.SetBase("2001:0000:f00d:cafe::", Ipv6Prefix(64));
-        Ipv6InterfaceContainer i6 = ipv6.Assign(d);
-        serverAddress = Address(i6.GetAddress(1, 1));
-    }
-
-    NS_LOG_INFO("Create Applications.");
-    //
-    // Create a UdpEchoServer application on node one.
-    //
-    uint16_t port = 9; // well-known echo port number
-    UdpEchoServerHelper server(port);
-    ApplicationContainer apps = server.Install(n.Get(1));
-    apps.Start(Seconds(1.0));
-    apps.Stop(Seconds(10.0));
+    TapBridgeHelper tapBridge;
+    tapBridge.SetAttribute("Mode", StringValue("UseBridge"));
+    tapBridge.SetAttribute("DeviceName", StringValue("tap-left"));
+    tapBridge.Install(nodes.Get(0), devices.Get(0));
 
     //
-    // Create a UdpEchoClient application to send UDP datagrams from node zero to
-    // node one.
+    // Connect the right side tap to the right side CSMA device on the right-side
+    // ghost node.
     //
-    uint32_t packetSize = 1024;
-    uint32_t maxPacketCount = 1;
-    Time interPacketInterval = Seconds(1.);
-    UdpEchoClientHelper client(serverAddress, port);
-    client.SetAttribute("MaxPackets", UintegerValue(maxPacketCount));
-    client.SetAttribute("Interval", TimeValue(interPacketInterval));
-    client.SetAttribute("PacketSize", UintegerValue(packetSize));
-    apps = client.Install(n.Get(0));
-    apps.Start(Seconds(2.0));
-    apps.Stop(Seconds(10.0));
-
-#if 0
-//
-// Users may find it convenient to initialize echo packets with actual data;
-// the below lines suggest how to do this
-//
-  client.SetFill (apps.Get (0), "Hello World");
-
-  client.SetFill (apps.Get (0), 0xa5, 1024);
-
-  uint8_t fill[] = { 0, 1, 2, 3, 4, 5, 6};
-  client.SetFill (apps.Get (0), fill, sizeof(fill), 1024);
-#endif
-
-    AsciiTraceHelper ascii;
-    csma.EnableAsciiAll(ascii.CreateFileStream("udp-echo.tr"));
-    csma.EnablePcapAll("udp-echo", false);
+    tapBridge.SetAttribute("DeviceName", StringValue("tap-right"));
+    tapBridge.Install(nodes.Get(1), devices.Get(1));
 
     //
-    // Now, do the actual simulation.
+    // Run the simulation for ten minutes to give the user time to play around
     //
-    NS_LOG_INFO("Run Simulation.");
+    Simulator::Stop(Seconds(600.));
     Simulator::Run();
     Simulator::Destroy();
-    NS_LOG_INFO("Done.");
 
     return 0;
 }

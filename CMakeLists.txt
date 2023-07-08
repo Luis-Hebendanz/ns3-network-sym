@@ -72,7 +72,16 @@ add_executable(client
   src/main.cpp
 )
 
-target_link_libraries(client PUBLIC ns3.38-core ns3.38-applications ns3.38-internet ns3.38-csma ns3.38-network)
+target_link_libraries(client PUBLIC 
+ns3.39-core 
+ns3.39-applications 
+ns3.39-internet 
+ns3.39-csma 
+ns3.39-network
+ns3.39-tap-bridge
+ns3.39-virtual-net-device
+ns3.39-fd-net-device
+)
 
 #add_sanitizers(client) # Add LLVMs sanitizers
 target_include_directories(client PRIVATE include)
